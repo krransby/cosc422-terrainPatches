@@ -1,0 +1,52 @@
+#version 400
+
+layout(vertices = 4) out;
+uniform vec3 eyePos;
+
+
+float[5] tessLevels(vec3 posn)
+{
+    float tessLevel[5];                 // output
+
+    int dmin = -10, dmax = 150;         // min and max distance
+    int LODLow = 10, LODHigh = 100;     // min and max L.O.D.
+    float nbrDst = 5.0f;                // distance to neighbouring patches
+
+    // Calculate distances to eye   
+    tessLevel[0] = distance(eyePos, posn - vec3(nbrDst, 0.0, 0.0));    // - x outer
+    tessLevel[1] = distance(eyePos, posn + vec3(0.0, 0.0, nbrDst));    // + z outer
+    tessLevel[2] = distance(eyePos, posn + vec3(nbrDst, 0.0, 0.0));    // + x outer
+    tessLevel[3] = distance(eyePos, posn - vec3(0.0, 0.0, nbrDst));    // - z outer
+    tessLevel[4] = distance(eyePos, posn);                             // inner (both)
+
+    // Calculate tessellation levels
+    for (int i = 0; i < 5; i++) 
+    {
+        float dist = clamp(tessLevel[i], dmin, dmax); // stops the terrain from disappearing
+        tessLevel[i] = int(mix(LODHigh, LODLow, float((dist-dmin)/(dmax-dmin))));
+    }
+
+    return tessLevel;
+}
+
+
+void main()
+{
+    // Calculate center of current patch
+    vec3 posn = (gl_in[0].gl_Position 
+                + gl_in[1].gl_Position 
+                + gl_in[2].gl_Position 
+                + gl_in[3].gl_Position).xyz * 0.25;
+    
+    // Get tessellation levels
+    float tessLvls[5] = tessLevels(posn);
+
+    gl_out[gl_InvocationID].gl_Position
+      = gl_in[gl_InvocationID].gl_Position;
+    gl_TessLevelOuter[0] = tessLvls[0];
+    gl_TessLevelOuter[1] = tessLvls[1];
+    gl_TessLevelOuter[2] = tessLvls[2];
+    gl_TessLevelOuter[3] = tessLvls[3];
+    gl_TessLevelInner[0] = tessLvls[4];
+    gl_TessLevelInner[1] = tessLvls[4];
+}

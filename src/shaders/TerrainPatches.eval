@@ -1,0 +1,66 @@
+#version 400
+
+layout(quads, equal_spacing, ccw) in;
+
+uniform float waterLevel;
+uniform sampler2D heightMap;
+
+out vec3 normals;
+out float currentdepth;
+
+
+// Adapted from Johan Andersson (2007) doi:10.1145/1281500.1281668
+vec3 filterNormal(vec2 uv, float texRes, float hMax, float sDist) 
+{ 
+    float pxlOffset = 1/texRes * sDist;
+
+	float samples[4];														//	   3
+    samples[0] = texture(heightMap, uv + pxlOffset*vec2( 0,-1)).r * hMax;	//	   |
+    samples[1] = texture(heightMap, uv + pxlOffset*vec2(-1, 0)).r * hMax;	// 1 - uv - 2
+    samples[2] = texture(heightMap, uv + pxlOffset*vec2( 1, 0)).r * hMax;	//	   |
+    samples[3] = texture(heightMap, uv + pxlOffset*vec2( 0, 1)).r * hMax;	//	   0
+
+    vec3 normal;
+	normal.x = samples[1] - samples[2];
+	normal.y = 2;
+	normal.z = samples[0] - samples[3];
+    
+    return normalize(normal); 
+}
+
+
+void main()
+{
+    float xmin = -50, xmax = 50, zmin = 5, zmax = -95;
+    float hMax = 10.0;
+    vec4 posn;
+    vec2 tcoord;
+
+    float u = gl_TessCoord.x;
+    float v = gl_TessCoord.y;
+
+    //Generate  a  bi-linear  mapping
+    posn = (1-u)* (1-v) * gl_in[0].gl_Position
+         +    u * (1-v) * gl_in[1].gl_Position
+         +    u *  v    * gl_in[2].gl_Position
+         + (1-u)*  v    * gl_in[3].gl_Position;
+    
+
+    tcoord.s = (posn.x - xmin)/(xmax - xmin);
+    tcoord.t = (posn.z - zmin)/(zmax - zmin);
+
+    // Sample heightmap and set height
+    float height = texture(heightMap, tcoord).r;
+    posn.y = height * hMax;
+
+    currentdepth = waterLevel - posn.y;
+    normals = filterNormal(tcoord, 1024.0, hMax, 20.0);
+
+    // Water level
+    if (posn.y <= waterLevel) 
+    {
+        posn.y = waterLevel;
+    }
+
+    gl_Position = posn;
+}
